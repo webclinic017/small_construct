@@ -1,0 +1,160 @@
+##########################################################################
+# Stock Technical Analysis with Python                                   #
+# Simple Moving Average SMA(5) and Commodity Channel Index CCI(20,0.015) #
+# (c) Diego Fernandez Garcia 2015-2017                                   #
+# www.exfinsis.com                                                       #
+##########################################################################
+
+# 1. Packages and Data
+
+# Packages Importing
+import numpy as np
+import pandas as pd
+# import pandas_datareader.data as web
+import matplotlib.pyplot as plt
+import talib as ta
+
+# Data Downloading or Reading
+
+# Google Finance
+# No Adjusted Close Prices
+# spy = web.DataReader('SPY', 'google', '2016-01-01', '2017-01-01')
+# spy['Adj Close'] = spy['Close']
+
+# Yahoo Finance
+# spy = web.DataReader('SPY', 'yahoo', '2016-01-01', '2017-01-01')
+
+# Data Reading
+spy = pd.read_csv("Data//Stock-Technical-Analysis-Data.txt", index_col='Date', parse_dates=True)
+
+##########
+
+# 2. Simple Moving Average SMA(5) and Commodity Channel Index CCI(20,0.015) Calculation and Chart
+# Technical Indicators Calculation
+spy['sma5'] = ta.SMA(np.asarray(spy['Close']), 5)
+spy['cci'] = ta.CCI(np.asarray(spy['High']), np.asarray(spy['Low']), np.asarray(spy['Close']), timeperiod=20)
+# Technical Indicators Chart
+fig1, ax = plt.subplots(2, sharex=True)
+ax[0].plot(spy['Close'])
+ax[0].plot(spy['sma5'])
+ax[0].legend(loc='upper left')
+ax[1].plot(spy['cci'], color='green')
+ax[1].legend(loc='upper left')
+plt.suptitle('SPY Close Prices, Simple Moving Average SMA(5) & Commodity Channel Index CCI(20,0.015)')
+plt.show()
+
+##########
+
+# 3. Price and Bands Crossover Trading Signals
+# Previous Periods Data (avoid backtesting bias)
+spy['Close(-1)'] = spy['Close'].shift(1)
+spy['sma5(-1)'] = spy['sma5'].shift(1)
+spy['cci(-1)'] = spy['cci'].shift(1)
+spy['Close(-2)'] = spy['Close'].shift(2)
+spy['sma5(-2)'] = spy['sma5'].shift(2)
+# Generate Trading Signals (buy=1 , sell=-1, do nothing=0)
+spy['ccismasig'] = 0
+ccismasig = 0
+for i, r in enumerate(spy.iterrows()):
+    if r[1]['Close(-2)'] < r[1]['sma5(-2)'] and r[1]['Close(-1)'] > r[1]['sma5(-1)'] and r[1]['cci(-1)'] < -100:
+        ccismasig = 1
+    elif r[1]['Close(-2)'] > r[1]['sma5(-2)'] and r[1]['Close(-1)'] < r[1]['sma5(-1)'] and r[1]['cci(-1)'] > 100:
+        ccismasig = -1
+    else:
+        ccismasig = 0
+    spy.iloc[i, 13] = ccismasig
+# Trading Signals Chart
+fig2, ax = plt.subplots(3, sharex=True)
+ax[0].plot(spy['Close'])
+ax[0].plot(spy['sma5'])
+ax[0].legend(loc='upper left')
+ax[1].plot(spy['cci'], color='green')
+ax[1].legend(loc='upper left')
+ax[2].plot(spy['ccismasig'], marker='o', linestyle='')
+ax[2].legend(loc='upper left')
+plt.suptitle('SPY Close Prices, Simple Moving Average SMA(5) & Commodity Channel Index CCI(20,0.015)')
+plt.show()
+
+##########
+
+# 4. Price and Bands Crossover Trading Strategy
+# Generate Trading Strategy (own stock=1 , not own stock=0, short-selling not available)
+spy['ccismastr'] = 1
+ccismastr = 0
+for i, r in enumerate(spy.iterrows()):
+    if r[1]['ccismasig'] == 1:
+        ccismastr = 1
+    elif r[1]['ccismasig'] == -1:
+        ccismastr = 0
+    else:
+        ccismastr = spy['ccismastr'][i-1]
+    spy.iloc[i, 14] = ccismastr
+# Trading Strategy Chart
+fig3, ax = plt.subplots(3, sharex=True)
+ax[0].plot(spy['Close'])
+ax[0].plot(spy['sma5'])
+ax[0].legend(loc='upper left')
+ax[1].plot(spy['cci'], color='green')
+ax[1].legend(loc='upper left')
+ax[2].plot(spy['ccismastr'], marker='o', linestyle='')
+ax[2].legend(loc='upper left')
+plt.suptitle('SPY Close Prices, Simple Moving Average SMA(5) & Commodity Channel Index CCI(20,0.015)')
+plt.show()
+
+##########
+
+# 5. Price and Bands Crossover Strategy Performance Comparison
+
+# 5.1. Strategies Daily Returns
+# Price and Bands Crossover Strategy Without Trading Commissions
+spy['ccismadrt'] = ((spy['Close']/spy['Close'].shift(1))-1)*spy['ccismastr']
+spy.iloc[0, 15] = 0
+# Price and Bands Crossover Strategy With Trading Commissions (1% Per Trade)
+spy['ccismastr(-1)'] = spy['ccismastr'].shift(1)
+spy['ccismatc'] = spy['ccismasig']
+ccismatc = 0
+for i, r in enumerate(spy.iterrows()):
+    if (r[1]['ccismasig'] == 1 or r[1]['ccismasig'] == -1) and r[1]['ccismastr'] != r[1]['ccismastr(-1)']:
+        ccismatc = 0.01
+    else:
+        ccismatc = 0.00
+    spy.iloc[i, 17] = ccismatc
+spy['ccismadrtc'] = (((spy['Close']/spy['Close'].shift(1))-1)-spy['ccismatc'])*spy['ccismastr']
+spy.iloc[0, 18] = 0
+# Buy and Hold Strategy
+spy['bhdrt'] = (spy['Close']/spy['Close'].shift(1))-1
+spy.iloc[0, 19] = 0
+
+# 5.2. Strategies Cumulative Returns
+# Cumulative Returns Calculation
+spy['ccismacrt'] = np.cumprod(spy['ccismadrt']+1)-1
+spy['ccismacrtc'] = np.cumprod(spy['ccismadrtc']+1)-1
+spy['bhcrt'] = np.cumprod(spy['bhdrt']+1)-1
+# Cumulative Returns Chart
+spy.plot(y=['ccismacrt', 'ccismacrtc', 'bhcrt'])
+plt.title('Simple Moving Average SMA(5) & Commodity Channel Index CCI(20,0.015) vs Buy & Hold')
+plt.legend(loc='upper left')
+plt.show()
+
+# 5.3. Strategies Performance Metrics
+# Annualized Returns
+ccismayrt = spy.iloc[251, 20]
+ccismayrtc = spy.iloc[251, 21]
+bhyrt = spy.iloc[251, 22]
+# Annualized Standard Deviation
+ccismastd = np.std(spy['ccismadrt'])*np.sqrt(252)
+ccismastdc = np.std(spy['ccismadrtc'])*np.sqrt(252)
+bhstd = np.std(spy['bhdrt'])*np.sqrt(252)
+# Annualized Sharpe Ratio
+ccismasr = ccismayrt/ccismastd
+ccismasrc = ccismayrtc/ccismastdc
+bhsr = bhyrt/bhstd
+# Summary Results Data Table
+data = [{'0': '', '1': 'SMA(5) &', '2': 'SMA(5) &', '3': 'B&H'},
+        {'0': '', '1': 'CCI(20,0.015)', '2': 'CCI(20,0.015)TC', '3': ''},
+        {'0': 'Annualized Return', '1': ccismayrt, '2': ccismayrtc, '3': bhyrt},
+        {'0': 'Annualized Standard Deviation', '1': ccismastd, '2': ccismastdc, '3': bhstd},
+        {'0': 'Annualized Sharpe Ratio (Rf=0%)', '1': ccismasr, '2': ccismasrc, '3': bhsr}]
+table = pd.DataFrame(data)
+print(spy)
+print(table)

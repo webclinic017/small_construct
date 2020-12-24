@@ -1,0 +1,152 @@
+######################################################
+# Stock Technical Analysis with Python               #
+# Williams %R(14)                                    #
+# (c) Diego Fernandez Garcia 2015-2017               #
+# www.exfinsis.com                                   #
+######################################################
+
+# 1. Packages and Data
+
+# Packages Importing
+import numpy as np
+import pandas as pd
+# import pandas_datareader.data as web
+import matplotlib.pyplot as plt
+import talib as ta
+
+# Data Downloading or Reading
+
+# Google Finance
+# No Adjusted Close Prices
+# spy = web.DataReader('SPY', 'google', '2016-01-01', '2017-01-01')
+# spy['Adj Close'] = spy['Close']
+
+# Yahoo Finance
+# spy = web.DataReader('SPY', 'yahoo', '2016-01-01', '2017-01-01')
+
+# Data Reading
+spy = pd.read_csv("Data//Stock-Technical-Analysis-Data.txt", index_col='Date', parse_dates=True)
+
+##########
+
+# 2. Williams %R(14) Calculation and Chart
+# Technical Indicator Calculation
+spy['wpr'] = ta.WILLR(np.asarray(spy['High']), np.asarray(spy['Low']), np.asarray(spy['Close']), timeperiod=14)
+# Technical Indicator Chart
+fig1, ax = plt.subplots(2, sharex=True)
+ax[0].plot(spy['Close'])
+ax[0].legend(loc='upper left')
+ax[1].plot(spy['wpr'], color='green')
+ax[1].legend(loc='upper left')
+plt.suptitle('SPY Close Prices & Williams %R(14)')
+plt.show()
+
+##########
+
+# 3. Bands Crossover Trading Signals
+# Previous Periods Data (avoid backtesting bias)
+spy['wpr(-1)'] = spy['wpr'].shift(1)
+spy['wpr(-2)'] = spy['wpr'].shift(2)
+# Generate Trading Signals (buy=1 , sell=-1, do nothing=0)
+spy['wprsig'] = 0
+wprsig = 0
+for i, r in enumerate(spy.iterrows()):
+    if r[1]['wpr(-2)'] < -80 and r[1]['wpr(-1)'] > -80:
+        wprsig = 1
+    elif r[1]['wpr(-2)'] < -20 and r[1]['wpr(-1)'] > -20:
+        wprsig = -1
+    else:
+        wprsig = 0
+    spy.iloc[i, 9] = wprsig
+# Trading Signals Chart
+fig2, ax = plt.subplots(3, sharex=True)
+ax[0].plot(spy['Close'])
+ax[0].legend(loc='upper left')
+ax[1].plot(spy['wpr'], color='green')
+ax[1].legend(loc='upper left')
+ax[2].plot(spy['wprsig'], marker='o', linestyle='', color='orange')
+ax[2].legend(loc='upper left')
+plt.suptitle('SPY Close Prices & Williams %R(14)')
+plt.show()
+
+##########
+
+# 4. Bands Crossover Trading Strategy
+# Generate Trading Strategy (own stock=1 , not own stock=0, short-selling not available)
+spy['wprstr'] = 1
+wprstr = 0
+for i, r in enumerate(spy.iterrows()):
+    if r[1]['wprsig'] == 1:
+        wprstr = 1
+    elif r[1]['wprsig'] == -1:
+        wprstr = 0
+    else:
+        wprstr = spy['wprstr'][i-1]
+    spy.iloc[i, 10] = wprstr
+# Trading Strategy Chart
+fig3, ax = plt.subplots(3, sharex=True)
+ax[0].plot(spy['Close'])
+ax[0].legend(loc='upper left')
+ax[1].plot(spy['wpr'], color='green')
+ax[1].legend(loc='upper left')
+ax[2].plot(spy['wprstr'], marker='o', linestyle='', color='orange')
+ax[2].legend(loc='upper left')
+plt.suptitle('SPY Close Prices & Williams %R(14)')
+plt.show()
+
+##########
+
+# 5. Bands Crossover Strategy Performance Comparison
+
+# 5.1. Strategies Daily Returns
+# Price Crossover Strategy Without Trading Commissions
+spy['wprdrt'] = ((spy['Close']/spy['Close'].shift(1))-1)*spy['wprstr']
+spy.iloc[0, 11] = 0
+# Price Crossover Strategy With Trading Commissions (1% Per Trade)
+spy['wprstr(-1)'] = spy['wprstr'].shift(1)
+spy['wprtc'] = spy['wprsig']
+wprtc = 0
+for i, r in enumerate(spy.iterrows()):
+    if (r[1]['wprsig'] == 1 or r[1]['wprsig'] == -1) and r[1]['wprstr'] != r[1]['wprstr(-1)']:
+        wprtc = 0.01
+    else:
+        wprtc = 0.00
+    spy.iloc[i, 13] = wprtc
+spy['wprdrtc'] = (((spy['Close']/spy['Close'].shift(1))-1)-spy['wprtc'])*spy['wprstr']
+spy.iloc[0, 14] = 0
+# Buy and Hold Strategy
+spy['bhdrt'] = (spy['Close']/spy['Close'].shift(1))-1
+spy.iloc[0, 15] = 0
+
+# 5.2. Strategies Cumulative Returns
+# Cumulative Returns Calculation
+spy['wprcrt'] = np.cumprod(spy['wprdrt']+1)-1
+spy['wprcrtc'] = np.cumprod(spy['wprdrtc']+1)-1
+spy['bhcrt'] = np.cumprod(spy['bhdrt']+1)-1
+# Cumulative Returns Chart
+spy.plot(y=['wprcrt', 'wprcrtc', 'bhcrt'])
+plt.title('Williams %R(14) vs Buy & Hold')
+plt.legend(loc='upper left')
+plt.show()
+
+# 5.3. Strategies Performance Metrics
+# Annualized Returns
+wpryrt = spy.iloc[251, 16]
+wpryrtc = spy.iloc[251, 17]
+bhyrt = spy.iloc[251, 18]
+# Annualized Standard Deviation
+wprstd = np.std(spy['wprdrt'])*np.sqrt(252)
+wprstdc = np.std(spy['wprdrtc'])*np.sqrt(252)
+bhstd = np.std(spy['bhdrt'])*np.sqrt(252)
+# Annualized Sharpe Ratio
+wprsr = wpryrt/wprstd
+wprsrc = wpryrtc/wprstdc
+bhsr = bhyrt/bhstd
+# Summary Results Data Table
+data = [{'0': '', '1': '%R(14)', '2': '%R(14)TC', '3': 'B&H'},
+        {'0': 'Annualized Return', '1': wpryrt, '2': wpryrtc, '3': bhyrt},
+        {'0': 'Annualized Standard Deviation', '1': wprstd, '2': wprstdc, '3': bhstd},
+        {'0': 'Annualized Sharpe Ratio (Rf=0%)', '1': wprsr, '2': wprsrc, '3': bhsr}]
+table = pd.DataFrame(data)
+print(spy)
+print(table)

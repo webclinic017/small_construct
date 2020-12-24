@@ -1,0 +1,161 @@
+######################################################
+# Stock Technical Analysis with Python               #
+# Bollinger Bands BB(20,2)                           #
+# (c) Diego Fernandez Garcia 2015-2017               #
+# www.exfinsis.com                                   #
+######################################################
+
+# 1. Packages and Data
+
+# Packages Importing
+import numpy as np
+import pandas as pd
+# import pandas_datareader.data as web
+import matplotlib.pyplot as plt
+import talib as ta
+
+# Data Downloading or Reading
+
+# Google Finance
+# No Adjusted Close Prices
+# spy = web.DataReader('SPY', 'google', '2016-01-01', '2017-01-01')
+# spy['Adj Close'] = spy['Close']
+
+# Yahoo Finance
+# spy = web.DataReader('SPY', 'yahoo', '2016-01-01', '2017-01-01')
+
+# Data Reading
+spy = pd.read_csv("Data//Stock-Technical-Analysis-Data.txt", index_col='Date', parse_dates=True)
+
+##########
+
+# 2. Bollinger Bands BB(20,2) Calculation and Chart
+
+# Technical Indicator Calculation
+spy['upper'], spy['middle'], spy['lower'] = ta.BBANDS(np.asarray(spy['Close']),
+                                                     timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
+# Technical Indicator Chart
+fig1, ax = plt.subplots()
+ax.plot(spy['Close'])
+ax.plot(spy['upper'], linestyle='--')
+ax.plot(spy['middle'], linestyle='--')
+ax.plot(spy['lower'], linestyle='--')
+plt.title('SPY Close Prices & Bollinger Bands BB(20,2)')
+plt.legend(loc='upper left')
+plt.show()
+
+##########
+
+# 3. Bands Crossover Trading Signals
+# Previous Periods Data (avoid back-testing bias)
+spy['Close(-1)'] = spy['Close'].shift(1)
+spy['lower(-1)'] = spy['lower'].shift(1)
+spy['upper(-1)'] = spy['upper'].shift(1)
+spy['Close(-2)'] = spy['Close'].shift(2)
+spy['lower(-2)'] = spy['lower'].shift(2)
+spy['upper(-2)'] = spy['upper'].shift(2)
+# Generate Trading Signals (buy=1 , sell=-1, do nothing=0)
+spy['bbsig'] = 0
+bbsig = 0
+for i, r in enumerate(spy.iterrows()):
+    if r[1]['Close(-2)'] < r[1]['lower(-2)'] and r[1]['Close(-1)'] > r[1]['lower(-1)']:
+        bbsig = 1
+    elif r[1]['Close(-2)'] < r[1]['upper(-2)'] and r[1]['Close(-1)'] > r[1]['upper(-1)']:
+        bbsig = -1
+    else:
+        bbsig = 0
+    spy.iloc[i, 15] = bbsig
+# Trading Signals Chart
+fig2, ax = plt.subplots(2, sharex=True)
+ax[0].plot(spy['Close'])
+ax[0].plot(spy['upper'], linestyle='--')
+ax[0].plot(spy['middle'], linestyle='--')
+ax[0].plot(spy['lower'], linestyle='--')
+ax[0].legend(loc='upper left')
+ax[1].plot(spy['bbsig'], marker='o', linestyle='')
+ax[1].legend(loc='upper left')
+plt.suptitle('SPY Close Prices & Bollinger Bands BB(20,2)')
+plt.show()
+
+##########
+
+# 4. Bands Crossover Trading Strategy
+# Generate Trading Strategy (own stock=1 , not own stock=0, short-selling not available)
+spy['bbstr'] = 1
+bbstr = 0
+for i, r in enumerate(spy.iterrows()):
+    if r[1]['bbsig'] == 1:
+        bbstr = 1
+    elif r[1]['bbsig'] == -1:
+        bbstr = 0
+    else:
+        bbstr = spy['bbstr'][i-1]
+    spy.iloc[i, 16] = bbstr
+# Trading Strategy Chart
+fig3, ax = plt.subplots(2, sharex=True)
+ax[0].plot(spy['Close'])
+ax[0].plot(spy['upper'], linestyle='--')
+ax[0].plot(spy['middle'], linestyle='--')
+ax[0].plot(spy['lower'], linestyle='--')
+ax[0].legend(loc='upper left')
+ax[1].plot(spy['bbstr'], marker='o', linestyle='')
+ax[1].legend(loc='upper left')
+plt.suptitle('SPY Close Prices & Bollinger Bands BB(20,2)')
+plt.show()
+
+##########
+
+# 5. Bands Crossover Strategy Performance Comparison
+
+# 5.1. Strategies Daily Returns
+# Bands Crossover Strategy Without Trading Commissions
+spy['bbdrt'] = ((spy['Close']/spy['Close'].shift(1))-1)*spy['bbstr']
+spy.iloc[0, 17] = 0
+# Bands Crossover Strategy With Trading Commissions (1% Per Trade)
+spy['bbstr(-1)'] = spy['bbstr'].shift(1)
+spy['bbtc'] = spy['bbsig']
+bbtc = 0
+for i, r in enumerate(spy.iterrows()):
+    if (r[1]['bbsig'] == 1 or r[1]['bbsig'] == -1) and r[1]['bbstr'] != r[1]['bbstr(-1)']:
+        bbtc = 0.01
+    else:
+        bbtc = 0.00
+    spy.iloc[i, 19] = bbtc
+spy['bbdrtc'] = (((spy['Close']/spy['Close'].shift(1))-1)-spy['bbtc'])*spy['bbstr']
+spy.iloc[0, 20] = 0
+# Buy and Hold Strategy
+spy['bhdrt'] = (spy['Close']/spy['Close'].shift(1))-1
+spy.iloc[0, 21] = 0
+
+# 5.2. Strategies Cumulative Returns
+# Cumulative Returns Calculation
+spy['bbcrt'] = np.cumprod(spy['bbdrt']+1)-1
+spy['bbcrtc'] = np.cumprod(spy['bbdrtc']+1)-1
+spy['bhcrt'] = np.cumprod(spy['bhdrt']+1)-1
+# Cumulative Returns Chart
+spy.plot(y=['bbcrt', 'bbcrtc', 'bhcrt'])
+plt.title('Bollinger Bands BB(20,2) vs Buy & Hold')
+plt.legend(loc='upper left')
+plt.show()
+
+# 5.3. Strategies Performance Metrics
+# Annualized Returns
+bbyrt = spy.iloc[251, 22]
+bbyrtc = spy.iloc[251, 23]
+bhyrt = spy.iloc[251, 24]
+# Annualized Standard Deviation
+bbstd = np.std(spy['bbdrt'])*np.sqrt(252)
+bbstdc = np.std(spy['bbdrtc'])*np.sqrt(252)
+bhstd = np.std(spy['bhdrt'])*np.sqrt(252)
+# Annualized Sharpe Ratio
+bbsr = bbyrt/bbstd
+bbsrc = bbyrtc/bbstdc
+bhsr = bhyrt/bhstd
+# Summary Results Data Table
+data = [{'0': '', '1': 'BB(20,2)', '2': 'BB(20,2)TC', '3': 'B&H'},
+        {'0': 'Annualized Return', '1': bbyrt, '2': bbyrtc, '3': bhyrt},
+        {'0': 'Annualized Standard Deviation', '1': bbstd, '2': bbstdc, '3': bhstd},
+        {'0': 'Annualized Sharpe Ratio (Rf=0%)', '1': bbsr, '2': bbsrc, '3': bhsr}]
+table = pd.DataFrame(data)
+print(spy)
+print(table)
