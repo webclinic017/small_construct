@@ -1,0 +1,153 @@
+######################################################
+# Stock Technical Analysis with Python               #
+# Rate of Change ROC(21)                             #
+# (c) Diego Fernandez Garcia 2015-2017               #
+# www.exfinsis.com                                   #
+######################################################
+
+# 1. Packages and Data
+
+# Packages Importing
+import numpy as np
+import pandas as pd
+# import pandas_datareader.data as web
+import matplotlib.pyplot as plt
+import talib as ta
+
+# Data Downloading or Reading
+
+# Google Finance
+# No Adjusted Close Prices
+# spy = web.DataReader('SPY', 'google', '2016-01-01', '2017-01-01')
+# spy['Adj Close'] = spy['Close']
+
+# Yahoo Finance
+# spy = web.DataReader('SPY', 'yahoo', '2016-01-01', '2017-01-01')
+
+# Data Reading
+spy = pd.read_csv("Data//Stock-Technical-Analysis-Data.txt", index_col='Date', parse_dates=True)
+
+##########
+
+# 2. Rate of Change ROC(21) Calculation and Chart
+
+# Technical Indicator Calculation
+spy['roc'] = ta.ROC(np.asarray(spy['Close']), timeperiod=21)
+# Technical Indicator Chart
+fig1, ax = plt.subplots(2, sharex=True)
+ax[0].plot(spy['Close'])
+ax[0].legend(loc='upper left')
+ax[1].plot(spy['roc'], color='green')
+ax[1].legend(loc='upper left')
+plt.suptitle('SPY Close Prices & Rate of Change ROC(21)')
+plt.show()
+
+##########
+
+# 3. Bands Crossover Trading Signals
+# Previous Periods Data (avoid backtesting bias)
+spy['roc(-1)'] = spy['roc'].shift(1)
+spy['roc(-2)'] = spy['roc'].shift(2)
+# Generate Trading Signals (buy=1 , sell=-1, do nothing=0)
+spy['rocsig'] = 0
+rocsig = 0
+for i, r in enumerate(spy.iterrows()):
+    if r[1]['roc(-2)'] < -10 and r[1]['roc(-1)'] > -10:
+        rocsig = 1
+    elif r[1]['roc(-2)'] < 10 and r[1]['roc(-1)'] > 10:
+        rocsig = -1
+    else:
+        rocsig = 0
+    spy.iloc[i, 9] = rocsig
+# Trading Signals Chart
+fig2, ax = plt.subplots(3, sharex=True)
+ax[0].plot(spy['Close'])
+ax[0].legend(loc='upper left')
+ax[1].plot(spy['roc'], color='green')
+ax[1].legend(loc='upper left')
+ax[2].plot(spy['rocsig'], marker='o', linestyle='', color='orange')
+ax[2].legend(loc='upper left')
+plt.suptitle('SPY Close Prices & Rate of Change ROC(21)')
+plt.show()
+
+##########
+
+# 4. Bands Crossover Trading Strategy
+# Generate Trading Strategy (own stock=1 , not own stock=0, short-selling not available)
+spy['rocstr'] = 1
+rocstr = 0
+for i, r in enumerate(spy.iterrows()):
+    if r[1]['rocsig'] == 1:
+        rocstr = 1
+    elif r[1]['rocsig'] == -1:
+        rocstr = 0
+    else:
+        rocstr = spy['rocstr'][i-1]
+    spy.iloc[i, 10] = rocstr
+# Trading Strategy Chart
+fig3, ax = plt.subplots(3, sharex=True)
+ax[0].plot(spy['Close'])
+ax[0].legend(loc='upper left')
+ax[1].plot(spy['roc'], color='green')
+ax[1].legend(loc='upper left')
+ax[2].plot(spy['rocstr'], marker='o', linestyle='', color='orange')
+ax[2].legend(loc='upper left')
+plt.suptitle('SPY Close Prices & Rate of Change ROC(21)')
+plt.show()
+
+##########
+
+# 5. Bands Crossover Strategy Performance Comparison
+
+# 5.1. Strategies Daily Returns
+# Price Crossover Strategy Without Trading Commissions
+spy['rocdrt'] = ((spy['Close']/spy['Close'].shift(1))-1)*spy['rocstr']
+spy.iloc[0, 11] = 0
+# Price Crossover Strategy With Trading Commissions (1% Per Trade)
+spy['rocstr(-1)'] = spy['rocstr'].shift(1)
+spy['roctc'] = spy['rocsig']
+roctc = 0
+for i, r in enumerate(spy.iterrows()):
+    if (r[1]['rocsig'] == 1 or r[1]['rocsig'] == -1) and r[1]['rocstr'] != r[1]['rocstr(-1)']:
+        roctc = 0.01
+    else:
+        roctc = 0.00
+    spy.iloc[i, 13] = roctc
+spy['rocdrtc'] = (((spy['Close']/spy['Close'].shift(1))-1)-spy['roctc'])*spy['rocstr']
+spy.iloc[0, 14] = 0
+# Buy and Hold Strategy
+spy['bhdrt'] = (spy['Close']/spy['Close'].shift(1))-1
+spy.iloc[0, 15] = 0
+
+# 5.2. Strategies Cumulative Returns
+# Cumulative Returns Calculation
+spy['roccrt'] = np.cumprod(spy['rocdrt']+1)-1
+spy['roccrtc'] = np.cumprod(spy['rocdrtc']+1)-1
+spy['bhcrt'] = np.cumprod(spy['bhdrt']+1)-1
+# Cumulative Returns Chart
+spy.plot(y=['roccrt', 'roccrtc', 'bhcrt'])
+plt.title('Rate of Change ROC(21) vs Buy & Hold')
+plt.legend(loc='upper left')
+plt.show()
+
+# 5.3. Strategies Performance Metrics
+# Annualized Returns
+rocyrt = spy.iloc[251, 16]
+rocyrtc = spy.iloc[251, 17]
+bhyrt = spy.iloc[251, 18]
+# Annualized Standard Deviation
+rocstd = np.std(spy['rocdrt'])*np.sqrt(252)
+rocstdc = np.std(spy['rocdrtc'])*np.sqrt(252)
+bhstd = np.std(spy['bhdrt'])*np.sqrt(252)
+# Annualized Sharpe Ratio
+rocsr = rocyrt/rocstd
+rocsrc = rocyrtc/rocstdc
+bhsr = bhyrt/bhstd
+# Summary Results Data Table
+data = [{'0': '', '1': 'ROC(21)', '2': 'ROC(21)TC', '3': 'B&H'},
+        {'0': 'Annualized Return', '1': rocyrt, '2': rocyrtc, '3': bhyrt},
+        {'0': 'Annualized Standard Deviation', '1': rocstd, '2': rocstdc, '3': bhstd},
+        {'0': 'Annualized Sharpe Ratio (Rf=0%)', '1': rocsr, '2': rocsrc, '3': bhsr}]
+table = pd.DataFrame(data)
+print(spy)
+print(table)

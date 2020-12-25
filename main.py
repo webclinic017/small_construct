@@ -1,22 +1,40 @@
 from src.data.make_dataset import StockMarket
+from models.movingAverage import MovingAverageGenerator
 from sklearn.externals import joblib
 import pandas as pd
 
 
 if __name__ == '__main__':
-    x = StockMarket()
+# make_dataset.py ~ STOCK_PRICE_HISTORY - (single_ticker, multiple_tickers, index_components)
+    priceHistory = StockMarket()
+    pull_price_history = input('Would you like to pull some stock price history?')
+    if pull_price_history.lower() == 'yes':
+        single = input('Pull Price History For - Single Ticker?')
+        if single.lower() == 'yes':
+            single_ticker = input('Please Enter Your Single Ticker:')
+            priceHistory.get_single_stock_price_history(single_ticker)
 
-# GET_TICKERS-SAVE_TICKERS-IMPORT_TICKERS---GET_DATA-SAVE_DATA-IMPORT_DATA
-    # path = '/home/gordon/work/small_builds/small_construct/data/raw/stock_tickers/dowTickers_.pkl'
-    # path = '/home/gordon/work/small_builds/small_construct/data/raw/stock_tickers/nasdaqTickers_.pkl
-    # path = '/home/gordon/work/small_builds/small_construct/data/raw/stock_tickers/otherTickers_.pkl'
-    # path = '/home/gordon/work/small_builds/small_construct/data/raw/stock_tickers/sp500tickers_.pkl'
-    sp500tickers = open('data/raw/stock_tickers/sp500tickers_.pkl', 'rb')
-    ticker_set = joblib.load(sp500tickers)
-    # x.get_stock_price_history(ticker_set, 'sp500tickers_priceHistory_')
+        multiple_tickers = input('Please Enter Your Stocks (seperate with space):')
+        if multiple_tickers.lower() == 'yes':
+            priceHistory.get_multiple_stock_price_history(multiple_tickers, 'mini_portfolio')
+    # saveName = 'sp500tickers_' # 'dowTickers_', 'nasdaqTickers_', 'otherTickers_'
+    # priceHistory.get_indexComponents_price_history(saveName)
 
-# MOVING_AVERAGES:
-    ticker = 'AAPL'
-    # signals = mAvg_trading_signals() 
-    # gainers()
-    # losers()
+
+# movingAverage.py ~ MOVING_AVERAGES:
+    mavg = MovingAverageGenerator()
+
+    tic = input('Hello, Is there a specific Stock you would like to generate a Moving Average For?')
+    if tic.lower() == 'yes':
+        ticker = input('Please Enter The Ticker:')
+        mavg.mAvg_trading_signals(ticker) 
+    
+    gain = input('Would you like to generate Moving Averages for the TOP-5-STOCK-GAINERS from today? ')
+    if gain.lower() == 'yes':
+        mavg.gainers()
+    
+    lose = input('Would you like to generate Moving Averages for the TOP-5-STOCK-LOSERS from today? ')
+    if lose.lower() == 'yes':
+        mavg.losers()
+    
+    print('\n   Thank you, have a great day & happy trading!\n')

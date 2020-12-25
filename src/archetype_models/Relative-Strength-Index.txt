@@ -1,0 +1,152 @@
+######################################################
+# Stock Technical Analysis with Python               #
+# Relative Strength Index RSI(14)                    #
+# (c) Diego Fernandez Garcia 2015-2017               #
+# www.exfinsis.com                                   #
+######################################################
+
+# 1. Packages and Data
+
+# Packages Importing
+import numpy as np
+import pandas as pd
+# import pandas_datareader.data as web
+import matplotlib.pyplot as plt
+import talib as ta
+
+# Data Downloading or Reading
+
+# Google Finance
+# No Adjusted Close Prices
+# spy = web.DataReader('SPY', 'google', '2016-01-01', '2017-01-01')
+# spy['Adj Close'] = spy['Close']
+
+# Yahoo Finance
+# spy = web.DataReader('SPY', 'yahoo', '2016-01-01', '2017-01-01')
+
+# Data Reading
+spy = pd.read_csv("Data//Stock-Technical-Analysis-Data.txt", index_col='Date', parse_dates=True)
+
+##########
+
+# 2. Relative Strength Index RSI(14) Calculation and Chart
+# Technical Indicator Calculation
+spy['rsi'] = ta.RSI(np.asarray(spy['Close']), timeperiod=14)
+# Technical Indicator Chart
+fig1, ax = plt.subplots(2, sharex=True)
+ax[0].plot(spy['Close'])
+ax[0].legend(loc='upper left')
+ax[1].plot(spy['rsi'], color='green')
+ax[1].legend(loc='upper left')
+plt.suptitle('SPY Close Prices & Relative Strength Index RSI(14)')
+plt.show()
+
+##########
+
+# 3. Bands Crossover Trading Signals
+# Previous Periods Data (avoid back-testing bias)
+spy['rsi(-1)'] = spy['rsi'].shift(1)
+spy['rsi(-2)'] = spy['rsi'].shift(2)
+# Generate Trading Signals (buy=1 , sell=-1, do nothing=0)
+spy['rsisig'] = 0
+rsisig = 0
+for i, r in enumerate(spy.iterrows()):
+    if r[1]['rsi(-2)'] < 30 and r[1]['rsi(-1)'] > 30:
+        rsisig = 1
+    elif r[1]['rsi(-2)'] < 70 and r[1]['rsi(-1)'] > 70:
+        rsisig = -1
+    else:
+        rsisig = 0
+    spy.iloc[i, 9] = rsisig
+# Trading Signals Chart
+fig2, ax = plt.subplots(3, sharex=True)
+ax[0].plot(spy['Close'])
+ax[0].legend(loc='upper left')
+ax[1].plot(spy['rsi'], color='green')
+ax[1].legend(loc='upper left')
+ax[2].plot(spy['rsisig'], marker='o', linestyle='', color='orange')
+ax[2].legend(loc='upper left')
+plt.suptitle('SPY Close Prices & Relative Strength Index RSI(14)')
+plt.show()
+
+##########
+
+# 4. Bands Crossover Trading Strategy
+# Generate Trading Strategy (own stock=1 , not own stock=0, short-selling not available)
+spy['rsistr'] = 1
+rsistr = 0
+for i, r in enumerate(spy.iterrows()):
+    if r[1]['rsisig'] == 1:
+        rsistr = 1
+    elif r[1]['rsisig'] == -1:
+        rsistr = 0
+    else:
+        rsistr = spy['rsistr'][i-1]
+    spy.iloc[i, 10] = rsistr
+# Trading Strategy Chart
+fig3, ax = plt.subplots(3, sharex=True)
+ax[0].plot(spy['Close'])
+ax[0].legend(loc='upper left')
+ax[1].plot(spy['rsi'], color='green')
+ax[1].legend(loc='upper left')
+ax[2].plot(spy['rsistr'], marker='o', linestyle='', color='orange')
+ax[2].legend(loc='upper left')
+plt.suptitle('SPY Close Prices & Relative Strength Index RSI(14)')
+plt.show()
+
+##########
+
+# 5. Bands Crossover Strategy Performance Comparison
+
+# 5.1. Strategies Daily Returns
+# Price Crossover Strategy Without Trading Commissions
+spy['rsidrt'] = ((spy['Close']/spy['Close'].shift(1))-1)*spy['rsistr']
+spy.iloc[0, 11] = 0
+# Price Crossover Strategy With Trading Commissions (1% Per Trade)
+spy['rsistr(-1)'] = spy['rsistr'].shift(1)
+spy['rsitc'] = spy['rsisig']
+rsitc = 0
+for i, r in enumerate(spy.iterrows()):
+    if (r[1]['rsisig'] == 1 or r[1]['rsisig'] == -1) and r[1]['rsistr'] != r[1]['rsistr(-1)']:
+        rsitc = 0.01
+    else:
+        rsitc = 0.00
+    spy.iloc[i, 13] = rsitc
+spy['rsidrtc'] = (((spy['Close']/spy['Close'].shift(1))-1)-spy['rsitc'])*spy['rsistr']
+spy.iloc[0, 14] = 0
+# Buy and Hold Strategy
+spy['bhdrt'] = (spy['Close']/spy['Close'].shift(1))-1
+spy.iloc[0, 15] = 0
+
+# 5.2. Strategies Cumulative Returns
+# Cumulative Returns Calculation
+spy['rsicrt'] = np.cumprod(spy['rsidrt']+1)-1
+spy['rsicrtc'] = np.cumprod(spy['rsidrtc']+1)-1
+spy['bhcrt'] = np.cumprod(spy['bhdrt']+1)-1
+# Cumulative Returns Chart
+spy.plot(y=['rsicrt', 'rsicrtc', 'bhcrt'])
+plt.title('Relative Strength Index RSI(14) vs Buy & Hold')
+plt.legend(loc='upper left')
+plt.show()
+
+# 5.3. Strategies Performance Metrics
+# Annualized Returns
+rsiyrt = spy.iloc[251, 16]
+rsiyrtc = spy.iloc[251, 17]
+bhyrt = spy.iloc[251, 18]
+# Annualized Standard Deviation
+rsistd = np.std(spy['rsidrt'])*np.sqrt(252)
+rsistdc = np.std(spy['rsidrtc'])*np.sqrt(252)
+bhstd = np.std(spy['bhdrt'])*np.sqrt(252)
+# Annualized Sharpe Ratio
+rsisr = rsiyrt/rsistd
+rsisrc = rsiyrtc/rsistdc
+bhsr = bhyrt/bhstd
+# Summary Results Data Table
+data = [{'0': '', '1': 'RSI(14)', '2': 'RSI(14)TC', '3': 'B&H'},
+        {'0': 'Annualized Return', '1': rsiyrt, '2': rsiyrtc, '3': bhyrt},
+        {'0': 'Annualized Standard Deviation', '1': rsistd, '2': rsistdc, '3': bhstd},
+        {'0': 'Annualized Sharpe Ratio (Rf=0%)', '1': rsisr, '2': rsisrc, '3': bhsr}]
+table = pd.DataFrame(data)
+print(spy)
+print(table)
