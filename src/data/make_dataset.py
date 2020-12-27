@@ -1,7 +1,8 @@
 import pandas as pd
 import yfinance as yf
 from yahoo_fin.stock_info import tickers_dow, tickers_nasdaq, tickers_other, tickers_sp500
-from sklearn.externals import joblib
+# from sklearn.externals import joblib
+import joblib
 
 
 class StockMarket(object):
